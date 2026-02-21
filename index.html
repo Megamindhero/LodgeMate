@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LodgeMate - Find your dream apartment today">
+    <meta name="theme-color" content="#6366f1">
+    <title>LodgeMate - Find Your Dream Apartment</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+
+    <!-- Preconnect to speed up external resource fetching -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preconnect" href="https://www.gstatic.com">
+
+    <!-- Font: only weights we actually use -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
+
+    <!-- Icons: subset only what we need via kit, fallback to full CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- React & ReactDOM (production, no dev overhead) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+    <!-- Firebase modular compat (only what we use) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <!-- Tailwind (production build from CDN, smaller than dev) -->
+    <link rel="stylesheet" href="https://cdn.tailwindcss.com/3.4.0/base.css" onerror="this.remove()">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* ── Base ───────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: background-color 0.3s ease;
+        }
+        .dark body, html.dark body { background: #0f172a; }
+
+        /* ── Animations (GPU-accelerated only) ──── */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scatterIn {
+            0%   { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--r)) scale(0.3); }
+            60%  { transform: translate(0,0) rotate(0deg) scale(1.08); }
+            100% { opacity: 1; transform: translate(0,0) rotate(0deg) scale(1); }
+        }
+        @keyframes shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .scatter-word     { display: inline-block; animation: scatterIn 0.75s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .animate-slide-in { animation: slideIn 0.5s ease-out both; }
+        .animate-slide-down { animation: slideDown 0.25s ease-out both; }
+
+        /* ── Skeleton loader ────────────────────── */
+        .skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            border-radius: 8px;
+        }
+        .dark .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+        }
+
+        /* ── Cards ──────────────────────────────── */
+        .property-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            will-change: transform;
+            contain: layout style;
+        }
+        .property-card:hover { transform: translateY(-4px); box-shadow: 0 16px 36px rgba(0,0,0,0.11); }
+
+        /* ── Image containers ───────────────────── */
+        .img-wrap { position: relative; overflow: hidden; background: #e2e8f0; }
+        .dark .img-wrap { background: #1e293b; }
+        .img-wrap img { transition: transform 0.35s ease, opacity 0.3s ease; display: block; }
+        .img-wrap img.loading { opacity: 0; }
+        .img-wrap img.loaded  { opacity: 1; }
+        .property-card:hover .img-wrap img { transform: scale(1.04); }
+
+        /* ── Badge ──────────────────────────────── */
+        .badge { backdrop-filter: blur(8px); background: rgba(255,255,255,0.92); }
+
+        /* ── Mobile drawer ──────────────────────── */
+        .mobile-menu { transform: translateX(-100%); transition: transform 0.28s ease; }
+        .mobile-menu.open { transform: translateX(0); }
+
+        /* ── Modal ──────────────────────────────── */
+        .modal-backdrop { backdrop-filter: blur(6px); animation: fadeIn 0.2s ease; }
+        .modal-content  { animation: slideIn 0.25s ease-out; }
+
+        /* ── Floating admin ─────────────────────── */
+        .floating-admin { position: fixed; bottom: 24px; right: 24px; z-index: 40; animation: fadeIn 0.4s ease; }
+        @media (max-width: 767px) { .floating-admin { display: none !important; } }
+
+        /* ── Card content uniform height ────────── */
+        .card-body { flex: 1; display: flex; flex-direction: column; }
+        .desc-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 44px; }
+
+        /* ── Gallery ────────────────────────────── */
+        .gallery-main { position: relative; height: 480px; overflow: hidden; border-radius: 12px; }
+        @media (max-width: 767px) { .gallery-main { height: 280px; } }
+        .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px,1fr)); gap: 6px; }
+        .thumb { aspect-ratio: 1; cursor: pointer; border: 2px solid transparent; border-radius: 8px; overflow: hidden; transition: border-color 0.18s; }
+        .thumb:hover, .thumb.active { border-color: #6366f1; }
+        .thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* ── Spinner ────────────────────────────── */
+        .spinner { width: 40px; height: 40px; border: 3px solid #e0e7ff; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.75s linear infinite; }
+
+        /* ── Content-visibility for off-screen sections ── */
+        .cv-auto { content-visibility: auto; contain-intrinsic-size: 0 400px; }
+
+        /* ── Focus styles ───────────────────────── */
+        :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+
+        /* Dark-mode scrollbar */
+        .dark ::-webkit-scrollbar { width: 6px; }
+        .dark ::-webkit-scrollbar-track { background: #1e293b; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// ─── Image Compression Utility ──────────────────────────────────────────────
+// Compresses images client-side before storing in Firebase (saves ~70-80% size)
+function compressImage(dataUrl, maxW, maxH, quality) {
+    return new Promise(resolve => {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width, h = img.height;
+            var ratio = Math.min(maxW / w, maxH / h, 1);
+            w = Math.round(w * ratio); h = Math.round(h * ratio);
+            var canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, w, h);
+            // Try WebP first (smaller), fallback to JPEG
+            var out = canvas.toDataURL('image/webp', quality);
+            if (out.length < 50) out = canvas.toDataURL('image/jpeg', quality);
+            resolve(out);
+        };
+        img.src = dataUrl;
+    });
+}
+
+// ─── Firebase ────────────────────────────────────────────────────────────────
+var firebaseConfig = {
+    apiKey: "AIzaSyBUCtHXwtrxIoHZK2N7aVgYIKRCU9zXI4c",
+    authDomain: "lodgemate-3c4ba.firebaseapp.com",
+    databaseURL: "https://lodgemate-3c4ba-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "lodgemate-3c4ba",
+    storageBucket: "lodgemate-3c4ba.firebasestorage.app",
+    messagingSenderId: "734584656247",
+    appId: "1:734584656247:web:e8a808cabb14dd04cc9172"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+</script>
+
+<!-- React app: compiled to plain ES5-compatible JSX-less code via inline transform -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+
+const { useState, useEffect, useCallback, useMemo, memo } = React;
+
+// ── Scatter positions (static, no recalc) ─────────────────────────────────
+const SCATTER = [
+    {tx:'-110px',ty:'-55px',r:'-14deg'},
+    {tx:'110px', ty:'-35px',r:'14deg'},
+    {tx:'-85px', ty:'48px', r:'9deg'},
+    {tx:'95px',  ty:'55px', r:'-18deg'},
+    {tx:'-65px', ty:'-75px',r:'22deg'},
+    {tx:'75px',  ty:'-65px',r:'-9deg'},
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function linkify(text, cls) {
+    if (!text) return null;
+    return text.split(/(https?:\/\/[^\s]+)/g).map((p, i) =>
+        /^https?:\/\//.test(p)
+            ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={cls} onClick={e => e.stopPropagation()}>{p}</a>
+            : p
+    );
+}
+
+// ── Lazy image with skeleton placeholder ──────────────────────────────────
+const LazyImg = memo(function LazyImg({ src, alt, className, style }) {
+    const [loaded, setLoaded] = useState(false);
+    const [error, setError]   = useState(false);
+
+    return (
+        <div className="relative w-full h-full">
+            {!loaded && !error && <div className="skeleton absolute inset-0" />}
+            {!error && (
+                <img
+                    src={src}
+                    alt={alt}
+                    loading="lazy"
+                    decoding="async"
+                    className={`${className} ${loaded ? 'loaded' : 'loading'}`}
+                    style={style}
+                    onLoad={() => setLoaded(true)}
+                    onError={() => setError(true)}
+                />
+            )}
+            {error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-400">
+                    <i className="fas fa-image text-3xl"></i>
+                </div>
+            )}
+        </div>
+    );
+});
+
+// ── Scatter text animation ─────────────────────────────────────────────────
+const ScatterText = memo(function ScatterText({ text, baseDelay }) {
+    return (
+        <span>
+            {text.split(' ').map((word, i) => {
+                const p = SCATTER[i % SCATTER.length];
+                return (
+                    <React.Fragment key={i}>
+                        <span className="scatter-word" style={{ '--tx': p.tx, '--ty': p.ty, '--r': p.r, animationDelay: `${baseDelay + i * 0.1}s`, opacity: 0 }}>
+                            {word}
+                        </span>
+                        {i < text.split(' ').length - 1 && ' '}
+                    </React.Fragment>
+                );
+            })}
+        </span>
+    );
+});
+
+// ── Lightbox ──────────────────────────────────────────────────────────────
+const ImageLightbox = memo(function ImageLightbox({ images, index, onClose, onNext, onPrev }) {
+    useEffect(() => {
+        const fn = e => {
+            if (e.key === 'Escape')     onClose();
+            if (e.key === 'ArrowRight') onNext();
+            if (e.key === 'ArrowLeft')  onPrev();
+        };
+        window.addEventListener('keydown', fn);
+        return () => window.removeEventListener('keydown', fn);
+    }, [onClose, onNext, onPrev]);
+
+    return (
+        <div className="fixed inset-0 bg-black/96 z-50 flex items-center justify-center p-3" onClick={onClose}>
+            <button onClick={onClose} className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full w-11 h-11 flex items-center justify-center transition z-10 text-lg">
+                <i className="fas fa-times"></i>
+            </button>
+            {images.length > 1 && <>
+                <button onClick={e => { e.stopPropagation(); onPrev(); }} className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 flex items-center justify-center transition z-10 text-xl">
+                    <i className="fas fa-chevron-left"></i>
+                </button>
+                <button onClick={e => { e.stopPropagation(); onNext(); }} className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 flex items-center justify-center transition z-10 text-xl">
+                    <i className="fas fa-chevron-right"></i>
+                </button>
+            </>}
+            <img src={images[index]} alt="Full size" decoding="async"
+                className="max-w-full max-h-[92vh] object-contain rounded shadow-2xl"
+                onClick={e => e.stopPropagation()} />
+            {images.length > 1 && (
+                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-black/65 text-white px-5 py-1.5 rounded-full text-sm font-medium">
+                    {index + 1} / {images.length}
+                </div>
+            )}
+        </div>
+    );
+});
+
+// ── Header ─────────────────────────────────────────────────────────────────
+const Header = memo(function Header({ currentPage, darkMode, toggleDarkMode, onNavigateHome, onOpenAdminLogin }) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+    return (
+        <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-30 transition-colors duration-300" style={{ animation: 'slideDown 0.25s ease-out both' }}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-[70px]">
+                    {/* Logo */}
+                    <button onClick={onNavigateHome} className="flex items-center gap-2.5 focus-visible:outline-none">
+                        <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <i className="fas fa-home text-white text-base"></i>
+                        </div>
+                        <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                            LodgeMate
+                        </span>
+                    </button>
+
+                    {/* Desktop nav */}
+                    <nav className="hidden md:flex items-center gap-5">
+                        <button onClick={onNavigateHome} className={`text-sm font-semibold transition ${currentPage === 'home' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white'}`}>
+                            Home
+                        </button>
+                        <button onClick={toggleDarkMode} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" aria-label="Toggle theme">
+                            {darkMode
+                                ? <i className="fas fa-sun text-lg text-yellow-400"></i>
+                                : <i className="fas fa-moon text-lg text-gray-500"></i>}
+                        </button>
+                    </nav>
+
+                    {/* Mobile hamburger */}
+                    <button onClick={() => setMenuOpen(true)} className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" aria-label="Open menu">
+                        <i className="fas fa-bars text-lg text-gray-700 dark:text-gray-300"></i>
+                    </button>
+                </div>
+            </div>
+
+            {/* Mobile drawer */}
+            <div className={`mobile-menu ${menuOpen ? 'open' : ''} fixed inset-y-0 left-0 w-60 bg-white dark:bg-gray-900 shadow-2xl z-50`}>
+                <div className="p-5 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-7">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                <i className="fas fa-home text-white text-sm"></i>
+                            </div>
+                            <span className="font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">LodgeMate</span>
+                        </div>
+                        <button onClick={closeMenu} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            <i className="fas fa-times text-gray-600 dark:text-gray-300"></i>
+                        </button>
+                    </div>
+                    <nav className="space-y-1">
+                        {[
+                            { icon: 'fa-home',  label: 'Home',  action: () => { onNavigateHome(); closeMenu(); } },
+                            { icon: 'fa-lock',  label: 'Admin', action: () => { onOpenAdminLogin(); closeMenu(); } },
+                        ].map(item => (
+                            <button key={item.label} onClick={item.action} className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 font-medium text-gray-700 dark:text-gray-300 transition text-sm">
+                                <i className={`fas ${item.icon} mr-3 w-4`}></i>{item.label}
+                            </button>
+                        ))}
+                        <button onClick={() => { toggleDarkMode(); closeMenu(); }} className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 font-medium text-gray-700 dark:text-gray-300 transition text-sm">
+                            {darkMode
+                                ? <><i className="fas fa-sun mr-3 w-4 text-yellow-400"></i>Light Mode</>
+                                : <><i className="fas fa-moon mr-3 w-4"></i>Dark Mode</>}
+                        </button>
+                    </nav>
+                </div>
+            </div>
+            {menuOpen && <div className="fixed inset-0 bg-black/40 z-40" onClick={closeMenu} />}
+        </header>
+    );
+});
+
+// ── Hero ───────────────────────────────────────────────────────────────────
+const Hero = memo(function Hero() {
+    return (
+        <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-600 text-white py-20 md:py-28 px-4 overflow-hidden">
+            <div className="max-w-5xl mx-auto text-center">
+                <p className="text-base md:text-lg text-indigo-100 mb-1 font-medium">
+                    <ScatterText text="Welcome to" baseDelay={0} />
+                </p>
+                <h1 className="text-5xl md:text-7xl font-extrabold mb-5 tracking-tight leading-none">
+                    <ScatterText text="LodgeMate" baseDelay={0.25} />
+                </h1>
+                <p className="text-lg md:text-2xl text-indigo-50 font-light">
+                    <ScatterText text="Find your dream apartment today" baseDelay={0.55} />
+                </p>
+            </div>
+        </div>
+    );
+});
+
+// ── Property Card ─────────────────────────────────────────────────────────
+const PropertyCard = memo(function PropertyCard({ property, onView, onWhatsApp, onOpenLightbox }) {
+    return (
+        <article className="property-card bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden transition-colors duration-300 cv-auto">
+            {/* Image */}
+            <div className="img-wrap relative h-52 cursor-pointer" onClick={() => onOpenLightbox(property.images, 0)}>
+                <LazyImg src={property.images[0]} alt={property.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/12 transition flex items-center justify-center">
+                    <i className="fas fa-search-plus text-white text-2xl opacity-0 hover:opacity-100 transition drop-shadow"></i>
+                </div>
+                {property.images.length > 1 && (
+                    <span className="badge absolute bottom-2.5 right-2.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-gray-700">
+                        <i className="fas fa-images mr-1"></i>{property.images.length}
+                    </span>
+                )}
+            </div>
+
+            {/* Content */}
+            <div className="card-body p-5 cursor-pointer" onClick={() => onView(property)}>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2 truncate">{property.title}</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 desc-clamp leading-relaxed">
+                    {linkify(property.description, 'text-indigo-500 underline')}
+                </p>
+                <div className="mt-auto">
+                    <button onClick={e => { e.stopPropagation(); onWhatsApp(property); }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                        <i className="fab fa-whatsapp text-base"></i>Contact on WhatsApp
+                    </button>
+                </div>
+            </div>
+        </article>
+    );
+});
+
+// ── Detail Page ───────────────────────────────────────────────────────────
+function DetailPage({ property, darkMode, toggleDarkMode, onBack, onWhatsApp, onOpenLightbox, onOpenAdminLogin }) {
+    const [idx, setIdx] = useState(0);
+    const goNext = useCallback(() => setIdx(i => (i + 1) % property.images.length), [property.images.length]);
+    const goPrev = useCallback(() => setIdx(i => (i - 1 + property.images.length) % property.images.length), [property.images.length]);
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300" style={{ animation: 'fadeIn 0.35s ease both' }}>
+            <Header currentPage="details" darkMode={darkMode} toggleDarkMode={toggleDarkMode} onNavigateHome={onBack} onOpenAdminLogin={onOpenAdminLogin} />
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-14">
+                <button onClick={onBack} className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white font-medium transition mb-6">
+                    <i className="fas fa-arrow-left"></i>Back to listings
+                </button>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden transition-colors duration-300">
+                    {/* Main image */}
+                    <div className="gallery-main cursor-pointer group" onClick={() => onOpenLightbox(property.images, idx)}>
+                        <LazyImg src={property.images[idx]} alt={property.title} className="w-full h-full object-cover" style={{ transition: 'opacity 0.3s ease' }} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/8 transition flex items-center justify-center">
+                            <span className="bg-white/90 dark:bg-gray-900/90 px-4 py-1.5 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 opacity-0 group-hover:opacity-100 transition shadow">
+                                <i className="fas fa-search-plus mr-2 text-indigo-600"></i>View full size
+                            </span>
+                        </div>
+                        {property.images.length > 1 && <>
+                            <button onClick={e => { e.stopPropagation(); goPrev(); }} className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-gray-800/90 text-gray-800 dark:text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition">
+                                <i className="fas fa-chevron-left text-sm"></i>
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); goNext(); }} className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-gray-800/90 text-gray-800 dark:text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition">
+                                <i className="fas fa-chevron-right text-sm"></i>
+                            </button>
+                        </>}
+                    </div>
+
+                    {/* Thumbnails */}
+                    {property.images.length > 1 && (
+                        <div className="px-5 py-4 bg-gray-50 dark:bg-gray-900/60">
+                            <div className="thumb-grid">
+                                {property.images.map((img, i) => (
+                                    <div key={i} onClick={() => onOpenLightbox(property.images, i)} className={`thumb ${idx === i ? 'active' : ''}`}>
+                                        <LazyImg src={img} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Text */}
+                    <div className="p-6 md:p-8">
+                        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-5 leading-snug">{property.title}</h1>
+
+                        <section className="mb-7">
+                            <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Description</h2>
+                            <p className="text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-sm md:text-base">
+                                {linkify(property.description, 'text-indigo-500 hover:text-indigo-600 underline underline-offset-2 font-medium')}
+                            </p>
+                        </section>
+
+                        {property.videoLink && (
+                            <section className="mb-7">
+                                <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Video Tour</h2>
+                                <a href={property.videoLink} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition text-sm shadow">
+                                    <i className="fab fa-youtube"></i>Watch Tour
+                                </a>
+                            </section>
+                        )}
+
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Ready to make this your home?</p>
+                            <button onClick={() => onWhatsApp(property)}
+                                className="w-full sm:w-auto px-7 py-3.5 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold text-base rounded-xl transition flex items-center justify-center gap-3 shadow-lg">
+                                <i className="fab fa-whatsapp text-xl"></i>Contact on WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Admin Form (fully isolated, stable identity) ──────────────────────────
+function AdminForm({ onSave, darkMode }) {
+    const [form, setForm]   = useState({ title:'', description:'', videoLink:'', images:[], whatsappNumber:'+234' });
+    const [saving, setSaving] = useState(false);
+
+    const set = useCallback((k, v) => setForm(prev => ({ ...prev, [k]: v })), []);
+
+    const onFiles = useCallback(e => {
+        const files = Array.from(e.target.files);
+        setForm(prev => {
+            if (files.length + prev.images.length > 10) { alert('Maximum 10 images'); return prev; }
+            return prev;
+        });
+        // Compress each image before storing
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                compressImage(ev.target.result, 1200, 900, 0.78).then(compressed => {
+                    setForm(prev => {
+                        if (prev.images.length >= 10) return prev;
+                        return { ...prev, images: [...prev.images, compressed] };
+                    });
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+    }, []);
+
+    const removeImg = useCallback(i => setForm(prev => ({ ...prev, images: prev.images.filter((_, j) => j !== i) })), []);
+
+    const submit = async e => {
+        e.preventDefault();
+        if (!form.title.trim() || !form.description.trim() || !form.images.length) {
+            alert('Please fill in title, description and add at least one image'); return;
+        }
+        if (form.description.length > 300) { alert('Description cannot exceed 300 characters'); return; }
+        try {
+            setSaving(true);
+            await onSave({ ...form, createdAt: new Date().toISOString() });
+            setForm({ title:'', description:'', videoLink:'', images:[], whatsappNumber:'+234' });
+            alert('Property added!');
+        } catch(err) { alert('Error: ' + err.message); }
+        finally { setSaving(false); }
+    };
+
+    const inp = `w-full px-4 py-2.5 border-2 border-gray-200 dark:border-gray-600 rounded-lg focus:border-indigo-500 focus:outline-none transition text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400`;
+
+    return (
+        <form onSubmit={submit} className="space-y-5">
+            <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1.5">Title *</label>
+                <input type="text" value={form.title} onChange={e => set('title', e.target.value)} className={inp} placeholder="e.g. 2 Bedroom Apartment in Lekki" />
+            </div>
+            <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1.5">Description * (max 300 chars)</label>
+                <textarea value={form.description} onChange={e => set('description', e.target.value)} maxLength={300} rows={4} className={inp + ' resize-none'} placeholder="Describe the property..." />
+                <p className={`text-xs mt-1 tabular-nums ${form.description.length > 270 ? 'text-red-500' : 'text-gray-400'}`}>{form.description.length}/300</p>
+            </div>
+            <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1.5">Video Link <span className="normal-case font-normal">(optional)</span></label>
+                <input type="url" value={form.videoLink} onChange={e => set('videoLink', e.target.value)} className={inp} placeholder="https://youtube.com/..." />
+            </div>
+            <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1.5">WhatsApp Number *</label>
+                <input type="text" value={form.whatsappNumber} onChange={e => set('whatsappNumber', e.target.value)} className={inp} placeholder="+2348012345678" />
+            </div>
+            <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1.5">Images * (Max 10) — auto-compressed</label>
+                <input type="file" multiple accept="image/*" onChange={onFiles}
+                    className="w-full px-3 py-2.5 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 transition file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/40 file:text-indigo-600 dark:file:text-indigo-400 hover:file:bg-indigo-100" />
+                {form.images.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
+                        {form.images.map((img, i) => (
+                            <div key={i} className="relative group aspect-square rounded-lg overflow-hidden">
+                                <img src={img} alt={`Preview ${i+1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                <button type="button" onClick={() => removeImg(i)}
+                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow transition opacity-0 group-hover:opacity-100">
+                                    <i className="fas fa-times text-xs"></i>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <button type="submit" disabled={saving}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition shadow text-sm">
+                {saving
+                    ? <><span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2" style={{animation:'spin 0.7s linear infinite',verticalAlign:'middle'}}></span>Saving...</>
+                    : <><i className="fas fa-plus-circle mr-2"></i>Add Property</>}
+            </button>
+        </form>
+    );
+}
+
+// ── Skeleton card (while loading) ─────────────────────────────────────────
+function SkeletonCard() {
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+            <div className="skeleton h-52 w-full"></div>
+            <div className="p-5 space-y-3">
+                <div className="skeleton h-4 w-3/4 rounded"></div>
+                <div className="skeleton h-3 w-full rounded"></div>
+                <div className="skeleton h-3 w-2/3 rounded"></div>
+                <div className="skeleton h-9 w-full rounded-lg mt-4"></div>
+            </div>
+        </div>
+    );
+}
+
+// ── Admin Page ────────────────────────────────────────────────────────────
+const AdminPage = memo(function AdminPage({ properties, darkMode, toggleDarkMode, onLogout, onSave, onDelete, onOpenLightbox, onOpenAdminLogin }) {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+            <Header currentPage="admin" darkMode={darkMode} toggleDarkMode={toggleDarkMode} onNavigateHome={onLogout} onOpenAdminLogin={onOpenAdminLogin} />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Top bar */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 mb-7 animate-slide-in transition-colors duration-300">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                                <i className="fas fa-cog text-indigo-600 text-xl"></i>Admin Panel
+                            </h1>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage your property listings</p>
+                        </div>
+                        <button onClick={onLogout} className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition text-sm">
+                            <i className="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+                    {/* Form */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 md:p-7 animate-slide-in transition-colors duration-300">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-5">Add New Property</h2>
+                        <AdminForm onSave={onSave} darkMode={darkMode} />
+                    </div>
+
+                    {/* List */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 md:p-7 animate-slide-in transition-colors duration-300">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-5">Your Properties ({properties.length})</h2>
+                        <div className="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+                            {properties.length === 0 ? (
+                                <div className="text-center py-14">
+                                    <i className="fas fa-home text-4xl text-gray-200 dark:text-gray-700 mb-3"></i>
+                                    <p className="text-gray-400 dark:text-gray-500 text-sm">No properties yet</p>
+                                </div>
+                            ) : properties.map(p => (
+                                <div key={p.id} className="flex items-start gap-3 p-3.5 border-2 border-gray-100 dark:border-gray-700 rounded-xl hover:border-indigo-200 dark:hover:border-indigo-600 transition">
+                                    <img src={p.images[0]} alt={p.title} loading="lazy" decoding="async" onClick={() => onOpenLightbox(p.images, 0)}
+                                        className="w-20 h-20 object-cover rounded-lg flex-shrink-0 cursor-pointer hover:opacity-80 transition" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-gray-900 dark:text-white text-sm truncate mb-0.5">{p.title}</p>
+                                        <p className="text-xs text-gray-400 dark:text-gray-500 line-clamp-2 leading-relaxed">{p.description}</p>
+                                    </div>
+                                    <button onClick={() => onDelete(p.id)}
+                                        className="flex-shrink-0 w-9 h-9 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center transition self-start">
+                                        <i className="fas fa-trash text-xs"></i>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+});
+
+// ── Admin Login Modal ─────────────────────────────────────────────────────
+function AdminLoginModal({ onLogin, onClose }) {
+    const [pwd, setPwd]   = useState('');
+    const [shake, setShake] = useState(false);
+
+    const attempt = () => {
+        if (pwd === 'HO#d&d5Hhq$f') { onLogin(); }
+        else { setShake(true); setTimeout(() => setShake(false), 500); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 modal-backdrop"
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-7 max-w-sm w-full modal-content shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-6">
+                    <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <i className="fas fa-lock text-indigo-600 dark:text-indigo-400 text-lg"></i>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Admin Login</h2>
+                </div>
+                <input type="password" value={pwd} onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key === 'Enter' && attempt()} autoFocus
+                    placeholder="Enter password"
+                    className={`w-full px-4 py-2.5 border-2 rounded-lg mb-4 focus:outline-none transition text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 ${shake ? 'border-red-400 focus:border-red-400' : 'border-gray-200 dark:border-gray-600 focus:border-indigo-500'}`} />
+                {shake && <p className="text-red-500 text-xs mb-3 -mt-2">Incorrect password. Try again.</p>}
+                <div className="flex gap-2">
+                    <button onClick={attempt} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-semibold transition text-sm">Login</button>
+                    <button onClick={onClose} className="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg font-semibold transition text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Home Page ─────────────────────────────────────────────────────────────
+const HomePage = memo(function HomePage({ properties, loading, darkMode, toggleDarkMode, onView, onWhatsApp, onOpenLightbox, onOpenAdminLogin }) {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+            <Header currentPage="home" darkMode={darkMode} toggleDarkMode={toggleDarkMode} onNavigateHome={() => {}} onOpenAdminLogin={onOpenAdminLogin} />
+            <Hero />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                {loading ? (
+                    <>
+                        <div className="skeleton h-6 w-48 rounded mb-8"></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {[1,2,3].map(i => <SkeletonCard key={i} />)}
+                        </div>
+                    </>
+                ) : properties.length === 0 ? (
+                    <div className="text-center py-24">
+                        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-5">
+                            <i className="fas fa-home text-3xl text-gray-300 dark:text-gray-600"></i>
+                        </div>
+                        <p className="text-gray-400 dark:text-gray-500 text-lg">No properties listed yet</p>
+                    </div>
+                ) : (
+                    <>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-7">Available Properties <span className="text-gray-400 font-normal text-base ml-1">({properties.length})</span></h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {properties.map(p => (
+                                <PropertyCard key={p.id} property={p} onView={onView} onWhatsApp={onWhatsApp} onOpenLightbox={onOpenLightbox} />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+});
+
+// ── Root App ──────────────────────────────────────────────────────────────
+function App() {
+    const [page, setPage]           = useState('home');
+    const [selProp, setSelProp]     = useState(null);
+    const [isAdmin, setIsAdmin]     = useState(false);
+    const [properties, setProps]    = useState([]);
+    const [loading, setLoading]     = useState(true);
+    const [showLogin, setShowLogin] = useState(false);
+    const [lb, setLb]               = useState({ open: false, images: [], index: 0 });
+    const [darkMode, setDarkMode]   = useState(() => {
+        try { const s = localStorage.getItem('lm_dark'); return s ? JSON.parse(s) : window.matchMedia('(prefers-color-scheme: dark)').matches; }
+        catch { return false; }
+    });
+
+    // Firebase listener with cleanup
+    useEffect(() => {
+        const ref = db.ref('properties');
+        const handler = snap => {
+            const data = snap.val();
+            setProps(data
+                ? Object.keys(data).map(k => ({ id: k, ...data[k] })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+                : []);
+            setLoading(false);
+        };
+        ref.on('value', handler);
+        return () => ref.off('value', handler); // cleanup on unmount
+    }, []);
+
+    // Dark mode: persist + apply
+    useEffect(() => {
+        try { localStorage.setItem('lm_dark', JSON.stringify(darkMode)); } catch {}
+        document.documentElement.classList.toggle('dark', darkMode);
+    }, [darkMode]);
+
+    // Respect OS preference changes
+    useEffect(() => {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const fn = e => {
+            try { if (!localStorage.getItem('lm_dark')) setDarkMode(e.matches); } catch {}
+        };
+        mq.addEventListener('change', fn);
+        return () => mq.removeEventListener('change', fn);
+    }, []);
+
+    const toggleDark  = useCallback(() => setDarkMode(d => !d), []);
+    const openLb      = useCallback((images, index) => { setLb({ open:true, images, index }); document.body.style.overflow = 'hidden'; }, []);
+    const closeLb     = useCallback(() => { setLb(l => ({ ...l, open:false })); document.body.style.overflow = ''; }, []);
+    const nextLb      = useCallback(() => setLb(l => ({ ...l, index: (l.index+1) % l.images.length })), []);
+    const prevLb      = useCallback(() => setLb(l => ({ ...l, index: (l.index-1+l.images.length) % l.images.length })), []);
+
+    const whatsApp    = useCallback(prop => {
+        const n = (prop.whatsappNumber || '+2348012345678').replace(/\D/g, '');
+        window.open(`https://wa.me/${n}?text=${encodeURIComponent("Hi! I'm interested in: " + prop.title)}`, '_blank');
+    }, []);
+
+    const viewDetails = useCallback(prop => { setSelProp(prop); setPage('details'); window.scrollTo({top:0,behavior:'smooth'}); }, []);
+    const goHome      = useCallback(() => { setPage('home'); window.scrollTo({top:0,behavior:'smooth'}); }, []);
+
+    const saveProp    = useCallback(async prop => {
+        const id = db.ref().child('properties').push().key;
+        await db.ref().update({ [`/properties/${id}`]: { ...prop, id } });
+    }, []);
+
+    const delProp     = useCallback(async id => {
+        if (window.confirm('Delete this property?')) await db.ref('properties/' + id).remove();
+    }, []);
+
+    const handleLogin  = useCallback(() => { setIsAdmin(true); setShowLogin(false); setPage('admin'); }, []);
+    const handleLogout = useCallback(() => { setIsAdmin(false); setPage('home'); }, []);
+    const openLogin    = useCallback(() => setShowLogin(true), []);
+
+    return (
+        <>
+            {page === 'home' && (
+                <HomePage properties={properties} loading={loading} darkMode={darkMode} toggleDarkMode={toggleDark}
+                    onView={viewDetails} onWhatsApp={whatsApp} onOpenLightbox={openLb} onOpenAdminLogin={openLogin} />
+            )}
+            {page === 'details' && selProp && (
+                <DetailPage property={selProp} darkMode={darkMode} toggleDarkMode={toggleDark}
+                    onBack={goHome} onWhatsApp={whatsApp} onOpenLightbox={openLb} onOpenAdminLogin={openLogin} />
+            )}
+            {page === 'admin' && isAdmin && (
+                <AdminPage properties={properties} darkMode={darkMode} toggleDarkMode={toggleDark}
+                    onLogout={handleLogout} onSave={saveProp} onDelete={delProp} onOpenLightbox={openLb} onOpenAdminLogin={openLogin} />
+            )}
+
+            {page !== 'admin' && (
+                <button onClick={openLogin} className="floating-admin hidden md:flex w-13 h-13 w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full items-center justify-center shadow-2xl transition" aria-label="Admin login">
+                    <i className="fas fa-lock"></i>
+                </button>
+            )}
+
+            {lb.open && <ImageLightbox images={lb.images} index={lb.index} onClose={closeLb} onNext={nextLb} onPrev={prevLb} />}
+            {showLogin && <AdminLoginModal onLogin={handleLogin} onClose={() => setShowLogin(false)} />}
+        </>
+    );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
