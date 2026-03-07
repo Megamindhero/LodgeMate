@@ -1,0 +1,20 @@
+[build]
+  command   = "npm run build"
+  publish   = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Redirect HTTP → HTTPS on custom domain
+[[redirects]]
+  from   = "http://lodgemate.ng/*"
+  to     = "https://lodgemate.ng/:splat"
+  status = 301
+  force  = true
+
+# Redirect www → non-www
+[[redirects]]
+  from   = "https://www.lodgemate.ng/*"
+  to     = "https://lodgemate.ng/:splat"
+  status = 301
+  force  = true
