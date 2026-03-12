@@ -579,3 +579,40 @@ html, body { overflow-x: hidden; max-width: 100vw; }
     padding-right: 1rem !important;
   }
 }
+
+/* ── Admin form grid — 2 cols desktop, 1 col mobile ── */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media(max-width: 540px) {
+  .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+  /* Prevent keyboard dismiss on iOS — inputs need stable position */
+  .lm-input, .lm-textarea {
+    font-size: 16px !important; /* below 16px iOS zooms in and re-renders, dismissing keyboard */
+  }
+  /* Listing row buttons — stack availability pill above icon buttons */
+  .admin-row-actions {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+}
+
+/* ── Hamburger animation (spans already use inline styles, this is just the hbg class fallback) ── */
+.hbg {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 2.25rem;
+  height: 2.25rem;
+}

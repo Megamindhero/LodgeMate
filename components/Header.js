@@ -19,6 +19,45 @@ const Header = memo(function Header({ currentPage, darkMode, toggleDarkMode, onN
     </button>
   );
 
+  /* Animated hamburger → X button */
+  const HamburgerBtn = () => (
+    <button
+      onClick={() => open ? close() : setOpen(true)}
+      aria-label={open ? 'Close menu' : 'Open menu'}
+      style={{
+        width:'2.25rem', height:'2.25rem',
+        background:'none', border:'none', cursor:'pointer',
+        display:'flex', flexDirection:'column',
+        alignItems:'center', justifyContent:'center',
+        gap:'5px', padding:'4px',
+        borderRadius:'0.5rem',
+        transition:'background 0.15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+    >
+      <span style={{
+        display:'block', width:'20px', height:'2px',
+        background:'var(--text)', borderRadius:'9999px',
+        transition:'transform 0.3s cubic-bezier(0.23,1,0.32,1), opacity 0.2s',
+        transform: open ? 'translateY(7px) rotate(45deg)' : 'none',
+      }} />
+      <span style={{
+        display:'block', width:'20px', height:'2px',
+        background:'var(--text)', borderRadius:'9999px',
+        transition:'opacity 0.2s, transform 0.2s',
+        opacity: open ? 0 : 1,
+        transform: open ? 'scaleX(0)' : 'scaleX(1)',
+      }} />
+      <span style={{
+        display:'block', width:'20px', height:'2px',
+        background:'var(--text)', borderRadius:'9999px',
+        transition:'transform 0.3s cubic-bezier(0.23,1,0.32,1), opacity 0.2s',
+        transform: open ? 'translateY(-7px) rotate(-45deg)' : 'none',
+      }} />
+    </button>
+  );
+
   return (
     <header className="site-header anim-down">
       <div style={{ maxWidth:'90rem', margin:'0 auto', padding:'0 1.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', height:'64px' }}>
@@ -37,10 +76,9 @@ const Header = memo(function Header({ currentPage, darkMode, toggleDarkMode, onN
               style={{ background:'none', border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600, color: currentPage==='home' ? 'var(--text)' : 'var(--text-2)', padding:'0.4rem 0.75rem', borderRadius:'0.625rem', transition:'all 0.15s' }}
               onMouseEnter={e=>e.currentTarget.style.background='var(--bg-3)'}
               onMouseLeave={e=>e.currentTarget.style.background='none'}>
-            
+              Home
             </button>
             <ThemeSwitch />
-            {/* Admin lock — desktop only */}
             <button onClick={onOpenAdminLogin}
               style={{ display:'flex', alignItems:'center', gap:'0.375rem', background:'var(--bg-3)', border:'1.5px solid var(--border-2)', borderRadius:'0.75rem', padding:'0.45rem 0.875rem', cursor:'pointer', color:'var(--text-2)', fontFamily:'inherit', fontSize:'0.8125rem', fontWeight:600, transition:'all 0.15s' }}
               onMouseEnter={e=>{e.currentTarget.style.background='var(--bg-4)';e.currentTarget.style.color='var(--text)';}}
@@ -49,12 +87,11 @@ const Header = memo(function Header({ currentPage, darkMode, toggleDarkMode, onN
               Admin
             </button>
           </div>
-          {/* Mobile: theme only + hamburger */}
+
+          {/* Mobile: theme + animated hamburger */}
           <div className="mobile-nav" style={{ display:'none', alignItems:'center', gap:'0.75rem' }}>
             <ThemeSwitch />
-            <button className="hbg" onClick={() => setOpen(true)} aria-label="Open menu">
-              <span /><span /><span />
-            </button>
+            <HamburgerBtn />
           </div>
         </div>
       </div>
@@ -72,13 +109,17 @@ const Header = memo(function Header({ currentPage, darkMode, toggleDarkMode, onN
                 </div>
                 <span style={{ fontWeight:900, letterSpacing:'-0.04em', color:'var(--text)', fontSize:'1rem' }}>LodgeMate</span>
               </div>
-              <button onClick={close} className="icon-btn">
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 1L10 10M10 1L1 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+              {/* X button in drawer header — matches animated hamburger */}
+              <button onClick={close}
+                style={{ width:'2rem', height:'2rem', borderRadius:'0.5rem', background:'var(--bg-3)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text)', transition:'background 0.15s' }}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--bg-4)'}
+                onMouseLeave={e=>e.currentTarget.style.background='var(--bg-3)'}>
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 1L10 10M10 1L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               </button>
             </div>
             <div style={{ padding:'0.75rem', flex:1, display:'flex', flexDirection:'column', gap:'0.125rem' }}>
               {[
-                { icon:'🏠', label:'Home', fn: () => { onNavigateHome(); close(); } },
+                { icon:'🏠', label:'Home',        fn: () => { onNavigateHome();    close(); } },
                 { icon:'🔐', label:'Admin Login', fn: () => { onOpenAdminLogin(); close(); } },
               ].map(item => (
                 <button key={item.label} onClick={item.fn}

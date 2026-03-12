@@ -96,7 +96,7 @@ export default function DetailPage({ property, darkMode, toggleDarkMode, onBack,
                     {property.location}
                   </p>
                 )}
-                <h1 style={{ fontWeight:900, fontSize:'clamp(1.25rem,3vw,1.75rem)', letterSpacing:'-0.035em', color:'var(--text)', margin:0, lineHeight:1.2 }}>
+                <h1 style={{ fontWeight:900, fontSize:'clamp(1.1rem,5vw,1.75rem)', letterSpacing:'-0.035em', color:'var(--text)', margin:0, lineHeight:1.2 }}>
                   {property.title}
                 </h1>
               </div>

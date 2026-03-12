@@ -51,14 +51,14 @@ function AdminForm({ onSave }) {
 
   return (
     <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+      <div className="admin-form-grid">
         <div style={{ gridColumn:'1/-1' }}>
           <Field label="Property Title *">
-            <input type="text" value={form.title} onChange={e=>set('title',e.target.value)} className="lm-input" placeholder="e.g. 3-Bed Flat, Gidan-Mango" />
+            <input type="text" value={form.title} onChange={e=>set('title',e.target.value)} className="lm-input" placeholder="e.g. 3-Bed Flat, Gidan-Mango" autoComplete="off" autoCorrect="off" spellCheck="false" />
           </Field>
         </div>
         <Field label="📍 Location *">
-          <input type="text" value={form.location} onChange={e=>set('location',e.target.value)} className="lm-input" placeholder="Gidan-Mango, Minna" />
+          <input type="text" value={form.location} onChange={e=>set('location',e.target.value)} className="lm-input" placeholder="Gidan-Mango, Minna" autoComplete="off" />
         </Field>
         <Field label="💰 Price (₦/year)" optional>
           <input type="number" value={form.price} onChange={e=>set('price',e.target.value)} className="lm-input" placeholder="e.g. 500000" />
@@ -70,9 +70,9 @@ function AdminForm({ onSave }) {
         <p style={{ fontSize:'0.75rem', color: form.description.length > 270 ? '#ef4444' : 'var(--text-3)', marginTop:'0.25rem', textAlign:'right' }}>{form.description.length}/300</p>
       </Field>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+      <div className="admin-form-grid">
         <Field label="📱 WhatsApp Number *">
-          <input type="text" value={form.whatsappNumber} onChange={e=>set('whatsappNumber',e.target.value)} className="lm-input" placeholder="+2348012345678" />
+          <input type="tel" value={form.whatsappNumber} onChange={e=>set('whatsappNumber',e.target.value)} className="lm-input" placeholder="+2348012345678" autoComplete="tel" />
         </Field>
         <Field label="🎬 Video Tour URL" optional>
           <input type="url" value={form.videoLink} onChange={e=>set('videoLink',e.target.value)} className="lm-input" placeholder="https://youtube.com/..." />
@@ -187,7 +187,7 @@ const AdminPage = memo(function AdminPage({ properties, darkMode, toggleDarkMode
                     {p.location && <p style={{ fontSize:'0.75rem', color:'var(--violet)', fontWeight:600, margin:'0 0 0.2rem', display:'flex', alignItems:'center', gap:'0.25rem' }}><i className="fas fa-map-marker-alt" style={{ fontSize:'0.55rem' }}></i>{p.location}</p>}
                     {p.price && <p style={{ fontSize:'0.75rem', color:'var(--text-2)', margin:0 }}>₦{Number(p.price).toLocaleString()}/yr</p>}
                   </div>
-                  <div style={{ display:'flex', gap:'0.375rem', flexShrink:0, alignItems:'center' }}>
+                  <div style={{ display:'flex', gap:'0.375rem', flexShrink:0, alignItems:'center', flexWrap:'wrap' }}>
                     {/* Availability toggle */}
                     <button
                       onClick={() => onToggleAvailable(p)}
