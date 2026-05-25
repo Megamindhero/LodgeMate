@@ -29,7 +29,35 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
   const [nameInput, setNameInput]   = useState(tenantSession.tenantName || '');
   const [savingName, setSavingName] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [unreadMap, setUnreadMap]   = useState({}); // ticketId -> true if has unread
+
   const chatEndRef = useRef(null);
+
+  // Load read state from localStorage and compare with current messages
+  useEffect(() => {
+    if (!tickets.length) return;
+    const stored = JSON.parse(localStorage.getItem(`lm_read_${otp}`) || '{}');
+    const newUnread = {};
+    tickets.forEach(t => {
+      const msgs = t.messages ? Object.values(t.messages) : [];
+      // Count messages from landlord or admin only
+      const nonTenantMsgs = msgs.filter(m => m.from === 'landlord' || m.from === 'admin');
+      const lastSeen = stored[t.id] || 0;
+      if (nonTenantMsgs.length > lastSeen) newUnread[t.id] = true;
+    });
+    setUnreadMap(newUnread);
+  }, [tickets, otp]);
+
+  const markAsRead = useCallback((ticketId) => {
+    const t = tickets.find(t => t.id === ticketId);
+    if (!t) return;
+    const msgs = t.messages ? Object.values(t.messages) : [];
+    const nonTenantCount = msgs.filter(m => m.from === 'landlord' || m.from === 'admin').length;
+    const stored = JSON.parse(localStorage.getItem(`lm_read_${otp}`) || '{}');
+    stored[ticketId] = nonTenantCount;
+    localStorage.setItem(`lm_read_${otp}`, JSON.stringify(stored));
+    setUnreadMap(prev => ({ ...prev, [ticketId]: false }));
+  }, [tickets, otp]);
 
   useEffect(() => {
     const u1 = onValue(ref(db, `apartments/${landlordId}/${aptId}`), snap => {
@@ -73,6 +101,11 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
     const reader = new FileReader();
     reader.onload = async ev => {
       const compressed = await compressImage(ev.target.result, 800, 600, 0.6);
+      // Guard: base64 string over ~400KB means the image is still too large
+      if (compressed.length > 400 * 1024) {
+        alert('Image is too large even after compression. Please use a smaller photo.');
+        setUploadingImg(false); return;
+      }
       setForm(p => ({ ...p, image: compressed }));
       setUploadingImg(false);
     };
@@ -115,6 +148,19 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100);
   }, [msg, landlordId]);
 
+  const [closing,    setClosing]    = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const closeTicket = useCallback(async () => {
+    setClosing(true);
+    try {
+      await update(ref(db, `tickets/${landlordId}/${selTicket}`), { status:'closed', closedAt:new Date().toISOString() });
+      await update(ref(db, `apartments/${landlordId}/${aptId}`), { hasOpenTicket:false });
+    } catch { alert('Failed to close ticket. Try again.'); }
+    setShowConfirm(false);
+    setClosing(false);
+  }, [landlordId, selTicket, aptId]);
+
   const saveName = useCallback(async () => {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -138,14 +184,39 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
   if (view === 'ticket' && selTicket) {
     const t = tickets.find(t => t.id === selTicket);
     if (!t) { setView('home'); return null; }
+    // Mark as read when thread opens
+    markAsRead(selTicket);
     const messages = t.messages ? Object.values(t.messages).sort((a,b) => new Date(a.timestamp)-new Date(b.timestamp)) : [];
     return (
       <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column' }}>
         <Header currentPage="home" darkMode={darkMode} toggleDarkMode={toggleDarkMode} onNavigateHome={onLogout} onOpenAdminLogin={onOpenAdminLogin} />
         <div style={{ flex:1, maxWidth:'42rem', margin:'0 auto', padding:'1.5rem 1rem 2rem', width:'100%', display:'flex', flexDirection:'column', boxSizing:'border-box' }}>
-          <button onClick={() => setView('home')} className="btn btn-ghost btn-sm" style={{ marginBottom:'1rem', alignSelf:'flex-start' }}>
+          <button onClick={() => { setSelTicket(null); setView('home'); }} className="btn btn-ghost btn-sm" style={{ marginBottom:'1rem', alignSelf:'flex-start' }}>
             <i className="fas fa-arrow-left" style={{ fontSize:'0.7rem' }}></i>Back
           </button>
+
+          {/* Confirm close modal */}
+          {showConfirm && (
+            <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem' }}>
+              <div onClick={() => setShowConfirm(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }} />
+              <div className="admin-card" style={{ position:'relative', zIndex:1, maxWidth:'22rem', width:'100%', padding:'1.75rem', textAlign:'center' }}>
+                <div style={{ width:'3rem', height:'3rem', borderRadius:'0.875rem', background:'rgba(21,128,61,0.1)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1rem', fontSize:'1.25rem' }}>
+                  <i className="fas fa-check-circle" style={{ color:'var(--green)' }}></i>
+                </div>
+                <h3 style={{ fontWeight:800, fontSize:'1rem', color:'var(--text)', margin:'0 0 0.5rem' }}>Close this ticket?</h3>
+                <p style={{ color:'var(--text-2)', fontSize:'0.875rem', margin:'0 0 1.5rem', lineHeight:1.5 }}>
+                  This marks the issue as resolved. You won't be able to send more messages after closing.
+                </p>
+                <div style={{ display:'flex', gap:'0.75rem' }}>
+                  <button onClick={() => setShowConfirm(false)} className="btn btn-ghost" style={{ flex:1, height:'2.875rem' }}>Cancel</button>
+                  <button onClick={closeTicket} disabled={closing}
+                    style={{ flex:1, height:'2.875rem', borderRadius:'0.875rem', border:'none', background:'var(--green)', color:'white', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:700, cursor:'pointer', opacity:closing?0.6:1 }}>
+                    {closing ? 'Closing…' : 'Yes, Close'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Ticket header */}
           <div className="admin-card" style={{ padding:'1.25rem', marginBottom:'0.75rem', flexShrink:0 }}>
@@ -176,6 +247,14 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
                   <i className="fas fa-paper-plane" style={{ fontSize:'0.75rem' }}></i>
                 </button>
               </div>
+            )}
+            {t.status === 'open' && (
+              <button onClick={() => setShowConfirm(true)}
+                className="btn btn-ghost"
+                style={{ width:'100%', borderColor:'rgba(21,128,61,0.3)', color:'var(--green)', marginTop:'0.5rem' }}>
+                <i className="fas fa-check-circle" style={{ fontSize:'0.75rem' }}></i>
+                Mark as Resolved
+              </button>
             )}
             {t.status === 'closed' && (
               <div style={{ marginTop:'0.75rem', borderTop:'1px solid var(--border)', paddingTop:'0.75rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
@@ -322,8 +401,13 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
         </button>
 
         {/* Tickets list */}
-        <h2 style={{ fontWeight:800, fontSize:'1rem', color:'var(--text)', margin:'0 0 0.875rem', letterSpacing:'-0.025em' }}>
+        <h2 style={{ fontWeight:800, fontSize:'1rem', color:'var(--text)', margin:'0 0 0.875rem', letterSpacing:'-0.025em', display:'flex', alignItems:'center', gap:'0.625rem' }}>
           My Complaints <span style={{ fontWeight:500, color:'var(--text-3)', fontSize:'0.875rem' }}>({tickets.length})</span>
+          {Object.values(unreadMap).filter(Boolean).length > 0 && (
+            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', minWidth:'1.25rem', height:'1.25rem', borderRadius:'9999px', background:'var(--violet)', color:'white', fontSize:'0.625rem', fontWeight:800, padding:'0 0.3rem' }}>
+              {Object.values(unreadMap).filter(Boolean).length}
+            </span>
+          )}
         </h2>
         {tickets.length === 0 ? (
           <div className="admin-card" style={{ padding:'2.5rem 1.5rem', textAlign:'center' }}>
@@ -333,22 +417,33 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.625rem' }}>
-            {tickets.map(t => (
-              <button key={t.id} onClick={() => { setSelTicket(t.id); setView('ticket'); }}
-                className="admin-card"
-                style={{ padding:'1rem 1.125rem', cursor:'pointer', border:'1px solid var(--border)', borderRadius:'0.875rem', textAlign:'left', width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.75rem', background:'var(--card-bg)' }}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--violet)';e.currentTarget.style.transform='translateY(-1px)';}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none';}}>
-                <div style={{ minWidth:0 }}>
-                  <p style={{ fontWeight:700, color:'var(--text)', margin:'0 0 0.2rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.9rem' }}>{t.title}</p>
-                  <p style={{ color:'var(--text-2)', fontSize:'0.75rem', margin:0 }}>{new Date(t.createdAt).toLocaleDateString('en-NG')}{t.image && ' · 📷'}</p>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexShrink:0 }}>
-                  <StatusBadge status={t.status} />
-                  <i className="fas fa-chevron-right" style={{ color:'var(--text-3)', fontSize:'0.65rem' }}></i>
-                </div>
-              </button>
-            ))}
+            {tickets.map(t => {
+              const hasUnread = !!unreadMap[t.id];
+              return (
+                <button key={t.id} onClick={() => { setSelTicket(t.id); setView('ticket'); markAsRead(t.id); }}
+                  className="admin-card"
+                  style={{ padding:'1rem 1.125rem', cursor:'pointer', border:`1px solid ${hasUnread ? 'rgba(124,58,237,0.35)' : 'var(--border)'}`, borderRadius:'0.875rem', textAlign:'left', width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.75rem', background: hasUnread ? 'rgba(124,58,237,0.04)' : 'var(--card-bg)' }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--violet)';e.currentTarget.style.transform='translateY(-1px)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=hasUnread?'rgba(124,58,237,0.35)':'var(--border)';e.currentTarget.style.transform='none';}}>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.2rem', flexWrap:'wrap' }}>
+                      <p style={{ fontWeight:700, color:'var(--text)', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.9rem' }}>{t.title}</p>
+                      {hasUnread && (
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', padding:'0.125rem 0.5rem', borderRadius:'9999px', fontSize:'0.625rem', fontWeight:800, background:'var(--violet)', color:'white', flexShrink:0, animation:'breathe 1.5s ease-in-out infinite' }}>
+                          <span style={{ width:'4px', height:'4px', borderRadius:'9999px', background:'white' }} />
+                          New Reply
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ color:'var(--text-2)', fontSize:'0.75rem', margin:0 }}>{new Date(t.createdAt).toLocaleDateString('en-NG')}{t.image && ' · 📷'}</p>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexShrink:0 }}>
+                    <StatusBadge status={t.status} />
+                    <i className="fas fa-chevron-right" style={{ color:'var(--text-3)', fontSize:'0.65rem' }}></i>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
