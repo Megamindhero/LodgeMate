@@ -10,20 +10,20 @@ const nextConfig = {
         source: '/(.*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',     value: 'camera=(), microphone=(), geolocation=()' },
-          // Allow YouTube/Vimeo iframes — removed X-Frame-Options DENY
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com",
-              "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://www.youtube.com https://s.ytimg.com",
+              "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+              "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
               "media-src 'self' https:",
-              "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
-              "font-src 'self' https://cdnjs.cloudflare.com",
-              "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com",
+              "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
+              "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://firestore.googleapis.com",
+              "worker-src 'self' blob:",
             ].join('; '),
           },
         ],
