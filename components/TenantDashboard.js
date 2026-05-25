@@ -88,6 +88,13 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
     return () => unsub();
   }, [landlordId, aptId]);
 
+  // Mark ticket as read when thread view opens
+  useEffect(() => {
+    if (view === 'ticket' && selTicket) {
+      markAsRead(selTicket);
+    }
+  }, [view, selTicket]);
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     if (view === 'ticket') chatEndRef.current?.scrollIntoView({ behavior:'smooth' });
@@ -184,8 +191,6 @@ export default function TenantDashboard({ tenantSession, darkMode, toggleDarkMod
   if (view === 'ticket' && selTicket) {
     const t = tickets.find(t => t.id === selTicket);
     if (!t) { setView('home'); return null; }
-    // Mark as read when thread opens
-    markAsRead(selTicket);
     const messages = t.messages ? Object.values(t.messages).sort((a,b) => new Date(a.timestamp)-new Date(b.timestamp)) : [];
     return (
       <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column' }}>
