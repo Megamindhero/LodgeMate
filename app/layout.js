@@ -65,6 +65,9 @@ export const metadata = {
       'max-snippet': -1,
     },
   },
+  verification: {
+    google: 'QJq8fESgiXmV0AU62-XCwr1L43j_8fKxrrtxffjH8zM',
+  },
   alternates: {
     canonical: 'https://lodgemate.ng',
   },
